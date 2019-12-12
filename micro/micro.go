@@ -57,8 +57,8 @@ func (m *Micro) Register() {
 type Micro struct {
 	// netdata
 	module.Base
-	Config  `yaml:",inline"`
-	charts  *Charts
+	Config `yaml:",inline"`
+	// charts  *Charts
 	metrics map[string]int64
 
 	// go-micro
@@ -78,7 +78,6 @@ func (m *Micro) Init() bool {
 	// do initial scrape
 	if err := m.collect(context.Background()); err != nil {
 		m.Logger.Error(err)
-		return false
 	}
 
 	go func() {
@@ -104,8 +103,11 @@ func (m *Micro) Check() bool {
 }
 
 // Charts creates Charts
-func (Micro) Charts() *Charts {
-	return charts.Copy()
+func (m *Micro) Charts() *Charts {
+	m.RLock()
+	c := charts.Copy()
+	m.RUnlock()
+	return c
 }
 
 // Collect collects metrics
@@ -129,18 +131,18 @@ func (m *Micro) updateCharts(snapshots []*stats.Snapshot) error {
 			for _, ch := range charts {
 				if ch.ID == chartServiceGCRate {
 					ch.AddDim(&module.Dim{
-						ID:   svc + "." + ch.ID,
-						Name: strings.TrimPrefix(snap.Service.Name, "go.micro."),
+						ID:   svc + "_" + ch.ID,
+						Name: strings.TrimPrefix(strings.ReplaceAll(snap.Service.Name, ".", "_"), "go_micro_"),
 						Algo: module.Incremental,
 					})
 				} else {
 					ch.AddDim(&module.Dim{
-						ID:   svc + "." + ch.ID,
-						Name: strings.TrimPrefix(snap.Service.Name, "go.micro."),
+						ID:   svc + "_" + ch.ID,
+						Name: strings.TrimPrefix(strings.ReplaceAll(snap.Service.Name, ".", "_"), "go_micro_"),
 						Algo: module.Absolute,
 					})
 				}
-				m.Logger.Debug("Added dimension" + svc + "." + ch.ID)
+				m.Logger.Debug("Added dimension" + svc + "_" + ch.ID)
 				ch.MarkNotCreated()
 			}
 		}
@@ -168,17 +170,17 @@ func (m *Micro) collect(ctx context.Context) error {
 	m.Lock()
 	for _, s := range rsp.Stats {
 		k := key(s)
-		m.metrics[k+"."+chartServiceStarted] = int64(s.Started)
-		m.metrics[k+"."+chartServiceUptime] = int64(s.Uptime)
-		m.metrics[k+"."+chartServiceMemory] = int64(s.Memory)
-		m.metrics[k+"."+chartServiceThreads] = int64(s.Threads)
-		m.metrics[k+"."+chartServiceGC] = int64(s.Gc)
-		m.metrics[k+"."+chartServiceGCRate] = int64(s.Gc)
+		m.metrics[k+"_"+chartServiceStarted] = int64(s.Started)
+		m.metrics[k+"_"+chartServiceUptime] = int64(s.Uptime)
+		m.metrics[k+"_"+chartServiceMemory] = int64(s.Memory)
+		m.metrics[k+"_"+chartServiceThreads] = int64(s.Threads)
+		m.metrics[k+"_"+chartServiceGC] = int64(s.Gc)
+		m.metrics[k+"_"+chartServiceGCRate] = int64(s.Gc)
 	}
 	m.Unlock()
 	return nil
 }
 
 func key(s *stats.Snapshot) string {
-	return s.Service.Name + s.Service.Version + s.Service.Node.Id
+	return strings.ReplaceAll(s.Service.Node.Id+s.Service.Version, ".", "_")
 }
