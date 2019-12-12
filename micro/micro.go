@@ -34,7 +34,7 @@ func New() *Micro {
 	return &Micro{
 		Config:   Config{},
 		services: make(map[string]bool),
-		indexes:  make(map[string]int),
+		indexes:  make(map[string]map[string]bool),
 		metrics:  make(map[string]int64),
 		client:   client.DefaultClient,
 	}
@@ -71,7 +71,7 @@ type Micro struct {
 	sync.RWMutex
 	cached   []*registry.Service
 	services map[string]bool
-	indexes  map[string]int
+	indexes  map[string]map[string]bool
 }
 
 // Cleanup makes cleanup
@@ -128,13 +128,11 @@ func (m *Micro) Collect() map[string]int64 {
 func (m *Micro) updateCharts(snapshots []*stats.Snapshot) error {
 	sort.Sort(sortableSnapshot(snapshots))
 	getIndex := func(s *stats.Snapshot) string {
-		if i, found := m.indexes[key(s)]; !found {
-			m.indexes[key(s)] = 1
-			return "1"
-		} else {
-			m.indexes[key(s)] = i + 1
-			return strconv.Itoa(i + 1)
+		if _, found := m.indexes[s.Service.Name]; !found {
+			m.indexes[s.Service.Name] = make(map[string]bool)
 		}
+		m.indexes[s.Service.Name][key(s)] = true
+		return strconv.Itoa(len(m.indexes[s.Service.Name]))
 	}
 	m.Lock()
 	defer m.Unlock()
