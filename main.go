@@ -30,6 +30,8 @@ func main() {
 		micro.Version("latest"),
 	)
 
+	os.Args = append(os.Args[:1], os.Args[2:]...)
+
 	// Initialise service
 	service.Init()
 	microplugin.New().WithClient(service.Client()).Register()
