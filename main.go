@@ -35,6 +35,9 @@ func main() {
 	// Initialise service
 	service.Init()
 	microplugin.New().WithClient(service.Client()).Register()
+	go func() {
+		log.Fatal(service.Run())
+	}()
 
 	netdata := orchestrator.New()
 	netdata.Name = "micro.d"
@@ -50,10 +53,6 @@ func main() {
 	if !netdata.Setup() {
 		log.Fatal("Netdata failed to Setup()")
 	}
-	go netdata.Serve()
 
-	// Run service
-	if err := service.Run(); err != nil {
-		log.Fatal(err)
-	}
+	netdata.Serve()
 }
