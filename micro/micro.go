@@ -2,6 +2,8 @@ package micro
 
 import (
 	"context"
+	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -122,6 +124,17 @@ func (m *Micro) Collect() map[string]int64 {
 }
 
 func (m *Micro) updateCharts(snapshots []*stats.Snapshot) error {
+	sort.Sort(sortableSnapshot(snapshots))
+	indexes := make(map[string]int)
+	getIndex := func(s *stats.Snapshot) string {
+		if i, found := indexes[key(s)]; !found {
+			indexes[key(s)] = 1
+			return "1"
+		} else {
+			indexes[key(s)] = i + 1
+			return strconv.Itoa(i + 1)
+		}
+	}
 	m.Lock()
 	defer m.Unlock()
 	for _, snap := range snapshots {
@@ -132,13 +145,13 @@ func (m *Micro) updateCharts(snapshots []*stats.Snapshot) error {
 				if ch.ID == chartServiceGCRate {
 					ch.AddDim(&module.Dim{
 						ID:   svc + "_" + ch.ID,
-						Name: strings.TrimPrefix(strings.ReplaceAll(snap.Service.Name, ".", "_"), "go_micro_"),
+						Name: strings.TrimPrefix(strings.ReplaceAll(snap.Service.Name, ".", "_"), "go_micro_") + getIndex(snap),
 						Algo: module.Incremental,
 					})
 				} else {
 					ch.AddDim(&module.Dim{
 						ID:   svc + "_" + ch.ID,
-						Name: strings.TrimPrefix(strings.ReplaceAll(snap.Service.Name, ".", "_"), "go_micro_"),
+						Name: strings.TrimPrefix(strings.ReplaceAll(snap.Service.Name, ".", "_"), "go_micro_") + getIndex(snap),
 						Algo: module.Absolute,
 					})
 				}
@@ -183,4 +196,12 @@ func (m *Micro) collect(ctx context.Context) error {
 
 func key(s *stats.Snapshot) string {
 	return strings.ReplaceAll(s.Service.Node.Id+s.Service.Version, ".", "_")
+}
+
+type sortableSnapshot []*stats.Snapshot
+
+func (s sortableSnapshot) Len() int      { return len(s) }
+func (s sortableSnapshot) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
+func (s sortableSnapshot) Less(i, j int) bool {
+	return s[i].Service.Node.Id+s[i].Service.Version < s[j].Service.Node.Id+s[j].Service.Version
 }
